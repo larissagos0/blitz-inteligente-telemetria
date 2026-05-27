@@ -26,13 +26,52 @@ def calcular_media(km, combustivel, meta):
 
   except:
     return None
+  
+def calcular_divergencia(media_oficial, media_alternativa):
+
+  if pd.isna(media_oficial) or pd.isna(media_alternativa):
+    return None
+
+  try:
+    divergencia = abs(
+      (media_alternativa - media_oficial) / media_oficial
+    ) * 100
+
+    return round(divergencia, 2)
+  
+  except:
+    return None
+
+def classificar_divergencia(divergencia):
+  
+  try:
+
+    if pd.isna(divergencia):
+      return "Sem comparação"
     
+    if divergencia <= 5:
+      return "OK"
+    
+    elif divergencia <= 15:
+      return "Atenção"
+    
+    else:
+      return "Crítico"
+    
+  except:
+    return None
+
+
 if arquivo is not None:
   df = pd.read_excel(arquivo, header=2)
-  df["%Média"] = (df["%Média"] * 100)
 
-  st.write("Dados da Planilha:")
-  st.dataframe(df)
+  df["%Média"] = pd.to_numeric(
+    df["%Média"],
+    errors="coerce"
+  )
+
+  df["%Média"] = (df["%Média"] * 100).round(2)
+
 
   if "Set Nativo" in df.columns:
     df["KM_Nativo"], df["Comb_Nativo"] = zip(
@@ -72,6 +111,18 @@ if arquivo is not None:
 
       df.at[index, "Media_Alternativa"] = media  
 
+  df["Divergencia"] = df.apply(
+    lambda row: calcular_divergencia(
+      row["%Média"],
+      row["Media_Alternativa"]
+    ),
+    axis=1
+  )
+
+  df["Status"] = df["Divergencia"].apply(
+    classificar_divergencia
+  )
+
   st.write("Dados tratados:")
 
   colunas_exibir = [
@@ -87,7 +138,9 @@ if arquivo is not None:
     "Comb_Nativo",
     "KM_Retrac",
     "Comb_Retrac",
-    "Media_Alternativa"
+    "Media_Alternativa",
+    "Divergencia",
+    "Status"
     
 
   ]
