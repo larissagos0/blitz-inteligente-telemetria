@@ -1,6 +1,8 @@
 import streamlit as st 
 import pandas as pd
 import re 
+import plotly.express as px
+
 
 st.title("Blitz Inteligente de Telemetria")
 
@@ -146,6 +148,21 @@ if arquivo is not None:
   col3.metric("Atenção", atencao)
   col4.metric("Crítico", critico)
   col5.metric("Sem Comparação", sem_comparacao)
+
+  dados_grafico = pd.DataFrame({
+    "Status": ["OK", "Atenção", "Crítico", "Sem comparação"],
+    "Quantidade": [ok, atencao, critico, sem_comparacao]
+  })
+
+  grafico = px.bar(
+    dados_grafico,
+    x="Status",
+    y="Quantidade",
+    color="Status",
+    title="Resumo do status"
+  )
+
+  st.plotly_chart(grafico, use_container_width=True)
 
   filtro_status = st.selectbox(
     "Filtar por status",
