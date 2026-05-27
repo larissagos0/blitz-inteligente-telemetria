@@ -123,6 +123,38 @@ if arquivo is not None:
     classificar_divergencia
   )
 
+  total = len(df)
+  ok = len(df[df["Status"] == "OK"])
+  atencao = len(df[df["Status"] == "Atenção"])
+  critico = len(df[df["Status"] == "Crítico"])
+  sem_comparacao = len(df[df["Status"] == "Sem comparação"])
+
+  col1, col2, col3, col4, col5 = st.columns(5)
+  col1.metric("Total", total)
+  col2.metric("OK", ok)
+  col3.metric("Atenção", atencao)
+  col4.metric("Crítico", critico)
+  col5.metric("Sem Comparação", sem_comparacao)
+
+  filtro_status = st.selectbox(
+    "Filtar por status",
+    [
+      "Todos",
+      "OK",
+      "Atenção",
+      "Crítico",
+      "Sem comparação"
+    ]
+  )
+
+  if filtro_status == "Todos":
+    df_filtrado = df
+
+  else:
+    df_filtrado = df[
+      df["Status"] == filtro_status
+    ]
+
   st.write("Dados tratados:")
 
   colunas_exibir = [
@@ -145,4 +177,5 @@ if arquivo is not None:
 
   ]
 
-  st.dataframe(df[colunas_exibir])
+  st.dataframe(df_filtrado[colunas_exibir])
+
