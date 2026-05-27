@@ -61,6 +61,17 @@ def classificar_divergencia(divergencia):
   except:
     return None
 
+def colorir_status(valor):
+  if valor == "OK":
+    return "background-color: #b6fcb6"
+  elif valor == "Atenção":
+    return "background-color: #fff3b0"
+  elif valor == "Crítico":
+    return "background-color: #ffb3b3"
+  elif valor == "Sem comparação":
+    return "background-color: #d9d9d9"
+
+  return ""
 
 if arquivo is not None:
   df = pd.read_excel(arquivo, header=2)
@@ -177,5 +188,9 @@ if arquivo is not None:
 
   ]
 
-  st.dataframe(df_filtrado[colunas_exibir])
+  tabela_estilizada = df_filtrado[colunas_exibir].style.map(
+    colorir_status,
+    subset=["Status"]
+)
 
+  st.dataframe(tabela_estilizada)
