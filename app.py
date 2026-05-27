@@ -63,6 +63,19 @@ def classificar_divergencia(divergencia):
   except:
     return None
 
+def gerar_observacao(status, divergencia):
+
+  if status == "OK":
+    return "Divergência dentro do padrão esperado."
+  elif status == "Atenção":
+    return "Divergência moderada identificada. Recomenda-se validação."
+  elif status == "Crítico":
+    return "Possível inconsistência de telemetria detectada."
+  elif status == "Sem comparação":
+    return "Não foi possível comparar as telemetrias."
+  
+  return ""
+
 def colorir_status(valor):
   if valor == "OK":
     return "background-color: #b6fcb6"
@@ -136,6 +149,14 @@ if arquivo is not None:
     classificar_divergencia
   )
 
+  df["Observacao_IA"] = df.apply(
+    lambda row: gerar_observacao(
+      row["Status"],
+      row["Divergencia"]
+    ),
+    axis=1
+  )
+
   total = len(df)
   ok = len(df[df["Status"] == "OK"])
   atencao = len(df[df["Status"] == "Atenção"])
@@ -163,6 +184,24 @@ if arquivo is not None:
   )
 
   st.plotly_chart(grafico, use_container_width=True)
+
+  st.subheader("Veículos mais críticos")
+
+  top_criticos = df.sort_values(
+    by="Divergencia",
+    ascending=False
+  ).head(10)
+
+  colunas_criticos = [
+    "Telemetria Válida",
+    "Divergencia",
+    "Status",
+    "Observacao_IA"
+  ]
+
+  st.dataframe(
+    top_criticos[colunas_criticos]
+  )
 
   filtro_status = st.selectbox(
     "Filtar por status",
@@ -200,7 +239,8 @@ if arquivo is not None:
     "Comb_Retrac",
     "Media_Alternativa",
     "Divergencia",
-    "Status"
+    "Status",
+    "Observacao_IA"
     
 
   ]
@@ -211,3 +251,17 @@ if arquivo is not None:
 )
 
   st.dataframe(tabela_estilizada)
+  
+  excel = df_filtrado.to_excel(
+    "relatorio_telemetria.xlsx",
+    index=False,
+    engine="openpyxl"
+  )
+
+  with open("relatorio_telemetria.xlsx", "rb") as arquivo_excel:
+    st.download_button(
+      label="Baixar relatório em Excel",
+      data=arquivo_excel,
+      file_name="relatorio_telemetria.xlsx",
+      mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
