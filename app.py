@@ -36,10 +36,6 @@ with st.sidebar:
     )
 
 
-    st.divider()
-    st.caption("Sistema de telemetria v1.0")
-    st.divider()
-
     pagina_app = st.radio(
         "🧭 Navegação",
         [
@@ -49,7 +45,25 @@ with st.sidebar:
             "📥 Relatórios"
         ]
     )
+    
+    st.markdown(
+    """
+    <style>
+    .sidebar-footer {
+        position: fixed;
+        bottom: 15px;
+        left: 20px;
+        color: #9CA3AF;
+        font-size: 12px;
+    }
+    </style>
 
+    <div class="sidebar-footer">
+        🚚 Blitz Inteligente v1.0
+    </div>
+    """,
+    unsafe_allow_html=True
+)
 
 
 def extrair_dados(texto):
