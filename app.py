@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import re
 import plotly.express as px
+from google import genai
 
 
 st.set_page_config(
@@ -178,7 +179,25 @@ def kpi_card(titulo, valor, cor):
         </div>
     """, unsafe_allow_html=True)
 
+def gerar_diagnostico_gemini(prompt):
+    try:
 
+        client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
+
+        resposta = client.models.generate_content(
+        model="gemini-2.5-flash-lite",
+        contents=prompt
+    )
+
+        return resposta.text
+    except Exception:
+
+        return """
+⚠️ O agente de IA está temporariamente indisponível.
+
+A auditoria e os diagnósticos baseados em regras continuam funcionando normalmente.
+"""
+    
 if pagina_app == "📊 Dashboard":
 
     if arquivo is not None:
@@ -556,6 +575,103 @@ elif pagina_app == "🤖 Análise IA":
         st.markdown("### Observação automática")
         st.write(dados_veiculo["Observacao_IA"])
 
+        st.divider()
+
+
+        st.subheader("💬 Chat com Agente de Auditoria")
+
+        st.markdown(
+            "Faça perguntas sobre a auditoria, veículos críticos, prioridades ou recomendações operacionais."
+        )
+
+        total = len(df_ia)
+        ok = len(df_ia[df_ia["Status"] == "OK"])
+        atencao = len(df_ia[df_ia["Status"] == "Atenção"])
+        critico = len(df_ia[df_ia["Status"] == "Crítico"])
+        sem_comparacao = len(df_ia[df_ia["Status"] == "Sem comparação"])
+        baixa_rodagem = len(df_ia[df_ia["Status"] == "Baixa rodagem"])
+
+        df_validos = df_ia[
+            df_ia["Status"].isin(["OK", "Atenção", "Crítico"])
+        ].copy()
+
+        maior_divergencia = df_validos["Divergencia"].max()
+        media_divergencia = df_validos["Divergencia"].mean()
+
+        top_criticos_chat = df_ia[
+            df_ia["Status"] == "Crítico"
+        ].sort_values(
+            by="Divergencia",
+            ascending=False
+        ).head(10)
+
+        contexto_criticos = top_criticos_chat[
+            [
+                "Placa",
+                "Telemetria Válida",
+                "%Média",
+                "Media_Alternativa",
+                "Divergencia",
+                "KM Válido",
+                "Score_Confiabilidade",
+                "Status"
+            ]
+        ].to_string(index=False)
+
+        pergunta_usuario = st.text_area(
+            "Digite sua pergunta para o agente",
+            placeholder="Ex: Qual veículo devo priorizar e por quê?"
+        )
+
+        if st.button("🤖 Perguntar ao agente"):
+
+            if pergunta_usuario.strip() == "":
+                st.warning("Digite uma pergunta antes de enviar.")
+
+            else:
+                prompt_chat = f"""
+                Você é um agente especialista em auditoria de telemetria de veículos pesados.
+
+                Responda em português, de forma objetiva, operacional e útil para uma equipe de logística.
+
+                Dados gerais da auditoria:
+                - Total de veículos analisados: {total}
+                - OK: {ok}
+                - Atenção: {atencao}
+                - Crítico: {critico}
+                - Sem comparação: {sem_comparacao}
+                - Baixa rodagem: {baixa_rodagem}
+                - Maior divergência: {maior_divergencia:.2f}%
+                - Média de divergência: {media_divergencia:.2f}%
+
+                Top 10 veículos críticos:
+                {contexto_criticos}
+
+                Pergunta do usuário:
+                {pergunta_usuario}
+
+                Regras para resposta:
+                - Não invente dados fora do contexto informado.
+                - Se precisar priorizar, use a maior divergência e o status crítico.
+                - Sempre que possível, cite as placas relevantes.
+                - Termine com ações recomendadas.
+                """
+
+                try:
+                    with st.spinner("Consultando agente de auditoria..."):
+                        resposta_agente = gerar_diagnostico_gemini(prompt_chat)
+
+                    st.success("Resposta gerada pelo agente.")
+                    st.markdown(resposta_agente)
+
+                except Exception as erro:
+                    st.error(
+                        "Não foi possível consultar a IA neste momento. "
+                        "Verifique a cota da API ou tente novamente mais tarde."
+                    )
+                    st.caption(str(erro))
+
+        
     else:
         st.warning("Envie uma planilha na barra lateral para gerar o diagnóstico.")
 
