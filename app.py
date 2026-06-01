@@ -1,7 +1,8 @@
-import streamlit as st 
+import streamlit as st
 import pandas as pd
-import re 
+import re
 import plotly.express as px
+
 
 st.set_page_config(
     page_title="Blitz Inteligente",
@@ -28,15 +29,16 @@ st.divider()
 
 with st.sidebar:
     st.markdown("##⚙️ Controle do Painel")
+
     arquivo = st.file_uploader(
         "Envie a planilha Excel",
         type=["xlsx"]
     )
 
-    st.divider ()
+    st.divider()
 
     filtro_status = st.selectbox(
-        "Filtar por status",
+        "Filtrar por status",
         [
             "Todos",
             "OK",
@@ -48,10 +50,11 @@ with st.sidebar:
     )
 
     st.divider()
-    st.caption("Sistema de telemtria v1.0")
+    st.caption("Sistema de telemetria v1.0")
+
 
 def extrair_dados(texto):
-    numeros = re.findall(r'\d+', str(texto))
+    numeros = re.findall(r"\d+", str(texto))
 
     if len(numeros) >= 2:
         km = int(numeros[0])
@@ -74,6 +77,9 @@ def calcular_divergencia(media_oficial, media_alternativa):
         return None
 
     try:
+        if media_oficial <= 1:
+            return None
+
         divergencia = abs(
             (media_alternativa - media_oficial) / media_oficial
         ) * 100
@@ -87,8 +93,8 @@ def calcular_divergencia(media_oficial, media_alternativa):
 def classificar_divergencia(divergencia, km_valido):
     try:
         if km_valido < 30:
-            return "Baixa rodagem" 
-            
+            return "Baixa rodagem"
+
         if pd.isna(divergencia):
             return "Sem comparação"
 
@@ -108,61 +114,54 @@ def classificar_divergencia(divergencia, km_valido):
 def gerar_observacao(status, divergencia):
     if status == "OK":
         return "Divergência dentro do padrão esperado."
+
     elif status == "Atenção":
         return "Divergência moderada identificada. Recomenda-se validação."
+
     elif status == "Crítico":
         return "Possível inconsistência de telemetria detectada."
+
     elif status == "Sem comparação":
         return "Não foi possível comparar as telemetrias."
+
     elif status == "Baixa rodagem":
         return "Veículo com rodagem insuficiente para validação da telemetria."
-    
+
     return ""
 
 
 def calcular_score(status):
     if status == "OK":
         return 100
+
     elif status == "Atenção":
         return 70
+
     elif status == "Crítico":
         return 30
+
     elif status == "Baixa rodagem":
         return 0
 
     return 0
 
 
-def colorir_status(valor):
-    if valor == "OK":
-        return "background-color: #b6fcb6"
-    elif valor == "Atenção":
-        return "background-color: #fff3b0"
-    elif valor == "Crítico":
-        return "background-color: #ffb3b3"
-    elif valor == "Sem comparação":
-        return "background-color: #d9d9d9"
-    elif valor == "Baixa rodagem":
-        return "background-color: #cfe2ff"
-
-    return ""
-
 def kpi_card(titulo, valor, cor):
     st.markdown(f"""
         <div style="
-                background-color: #111827;
-                border-left: 6px solid {cor};
-                padding: 15px;
-                border-radius: 10px;
-                box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-                min-height: 90px;
+            background-color: #111827;
+            border-left: 6px solid {cor};
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+            min-height: 70px;
         ">
-                <p style="margin:0; color: #9ca3af; font-size:14px;">
-                    {titulo}
-                </p>
-                <h2 style="margin:0; color:white;">
-                    {valor}
-                </h2>
+            <p style="margin:0; color: #9ca3af; font-size:14px;">
+                {titulo}
+            </p>
+            <h2 style="margin:0; color:white;">
+                {valor}
+            </h2>
         </div>
     """, unsafe_allow_html=True)
 
@@ -192,8 +191,6 @@ if arquivo is not None:
 
     for index, row in df.iterrows():
         telemetria = str(row["Telemetria Válida"])
-
-        peso = float(str(row["Peso da Carga"]).replace(".", ""))
         meta = row["Meta"]
 
         if "Retrac" in telemetria:
@@ -202,15 +199,14 @@ if arquivo is not None:
                 row["Comb_Nativo"],
                 meta
             )
-            df.at[index, "Media_Alternativa"] = media
-
         else:
             media = calcular_media(
                 row["KM_Retrac"],
                 row["Comb_Retrac"],
                 meta
             )
-            df.at[index, "Media_Alternativa"] = media  
+
+        df.at[index, "Media_Alternativa"] = media
 
     df["Divergencia"] = df.apply(
         lambda row: calcular_divergencia(
@@ -245,8 +241,9 @@ if arquivo is not None:
     atencao = len(df[df["Status"] == "Atenção"])
     critico = len(df[df["Status"] == "Crítico"])
     sem_comparacao = len(df[df["Status"] == "Sem comparação"])
+    baixa_rodagem = len(df[df["Status"] == "Baixa rodagem"])
 
-    col1, col2, col3, col4, col5 = st.columns(5)
+    col1, col2, col3, col4, col5, col6 = st.columns(6)
 
     with col1:
         kpi_card("🚛 Total", total, "#1F6FEB")
@@ -263,18 +260,40 @@ if arquivo is not None:
     with col5:
         kpi_card("🔍 Sem comparação", sem_comparacao, "#6B7280")
 
+    with col6:
+        kpi_card("🚜 Baixa rodagem", baixa_rodagem, "#60A5FA")
+
     dados_grafico = pd.DataFrame({
-        "Status": ["OK", "Atenção", "Crítico", "Sem comparação"],
-        "Quantidade": [ok, atencao, critico, sem_comparacao]
+        "Status": [
+            "OK",
+            "Atenção",
+            "Crítico",
+            "Sem comparação",
+            "Baixa rodagem"
+        ],
+        "Quantidade": [
+            ok,
+            atencao,
+            critico,
+            sem_comparacao,
+            baixa_rodagem
+        ]
     })
 
-    grafico = px.bar(
+    grafico = px.pie(
         dados_grafico,
-        x="Status",
-        y="Quantidade",
-        text="Quantidade",
+        names="Status",
+        values="Quantidade",
+        hole=0.65,
+        title="Distribuição dos Status",
         color="Status",
-        title="Resumo do status"
+        color_discrete_map={
+            "OK": "#22C55E",
+            "Atenção": "#FACC15",
+            "Crítico": "#EF4444",
+            "Sem comparação": "#6B7280",
+            "Baixa rodagem": "#60A5FA"
+        }
     )
 
     grafico.update_layout(
@@ -283,11 +302,54 @@ if arquivo is not None:
         paper_bgcolor="#0e1117",
         plot_bgcolor="#0e1117",
         font_color="white",
+        height=420,
+        showlegend=True
     )
 
-    grafico.update_traces(textposition="outside")
+    grafico.update_traces(
+        textinfo="percent+label"
+    )
 
-    st.plotly_chart(grafico, use_container_width=True)
+    col_grafico, col_insights = st.columns([1, 1])
+
+    with col_grafico:
+        st.plotly_chart(
+            grafico,
+            width="stretch"
+        )
+
+    with col_insights:
+        st.markdown("<br><br>", unsafe_allow_html=True)
+        st.subheader("📌 Insights")
+
+        df_validos = df[
+            df["Status"].isin(["OK", "Atenção", "Crítico"])
+        ].copy()
+
+        maior_divergencia = df_validos["Divergencia"].max()
+        media_divergencia = df_validos["Divergencia"].mean()
+
+        kpi_card(
+            "Maior Divergência",
+            f"{maior_divergencia:.2f} %",
+            "#EF4444"
+        )
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        kpi_card(
+            "Média de Divergência",
+            f"{media_divergencia:.2f} %",
+            "#FACC15"
+        )
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        kpi_card(
+            "Total Analisado",
+            len(df),
+            "#1F6FEB"
+        )
 
     top_criticos = df[
         df["Status"] == "Crítico"
@@ -307,41 +369,21 @@ if arquivo is not None:
         "Observacao_IA",
     ]
 
-    colA, colB = st.columns([2,1])
+    st.divider()
 
-    with colA:
-        st.subheader("🚨 Veículos mais críticos")
-        st.dataframe(
-            top_criticos[colunas_criticos],
-            use_container_width=True
-        )
+    st.subheader("🚨 Top 10 Veículos Críticos")
 
-    with colB:
-        st.subheader("📌 Insights")
-
-        maior_divergencia = df["Divergencia"].max()
-        media_divergencia = df["Divergencia"].mean()
-
-        st.metric(
-            "Maior Divergência",
-            f"{maior_divergencia:.2f} %"
-        )
-        st.metric(
-            "Média de Divergência",
-            f"{media_divergencia:.2f} %"
-        )
-        st.metric(
-            "Total Analisado:",
-            len(df)
-        )
-
+    st.dataframe(
+        top_criticos[colunas_criticos],
+        width="stretch"
+    )
 
     if filtro_status == "Todos":
-        df_filtrado = df
+        df_filtrado = df.copy()
     else:
         df_filtrado = df[
             df["Status"] == filtro_status
-        ]
+        ].copy()
 
     colunas_inteiras = [
         "KM Válido",
@@ -361,7 +403,7 @@ if arquivo is not None:
             )
             .fillna(0)
             .astype(int)
-        )       
+        )
 
     colunas_decimais = [
         "%Média",
@@ -377,7 +419,6 @@ if arquivo is not None:
         ).round(2)
 
     st.divider()
-
 
     colunas_exibir = [
         "Peso da Carga",
@@ -404,16 +445,16 @@ if arquivo is not None:
         "📋 Ver Auditoria Completa",
         expanded=False
     ):
-
         registros_por_pagina = st.selectbox(
             "Registros por página",
             [10, 20, 50, 100],
             index=1
         )
 
-        total_paginas = (
-            len(df_filtrado) - 1
-        ) // registros_por_pagina + 1
+        total_paginas = max(
+            1,
+            (len(df_filtrado) - 1) // registros_por_pagina + 1
+        )
 
         pagina = st.number_input(
             "Página",
@@ -429,7 +470,7 @@ if arquivo is not None:
 
         st.dataframe(
             df_pagina[colunas_exibir],
-            use_container_width=True
+            width="stretch"
         )
 
     df_filtrado.to_excel(
