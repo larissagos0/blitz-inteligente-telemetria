@@ -2,7 +2,7 @@
 
 Sistema desenvolvido para auditoria inteligente de consumo de combustível e validação de telemetria de veículos pesados.
 
-O objetivo é identificar divergências entre diferentes fontes de telemetria, destacando veículos com possíveis inconsistências de dados e apoiando a tomada de decisão operacional.
+A solução combina análise de dados, dashboards executivos e Inteligência Artificial Generativa para identificar inconsistências, priorizar tratativas e apoiar a tomada de decisão operacional.
 
 ---
 
@@ -10,62 +10,106 @@ O objetivo é identificar divergências entre diferentes fontes de telemetria, d
 
 Em operações logísticas, diferentes sistemas de telemetria podem apresentar resultados divergentes para um mesmo veículo.
 
-A análise manual desses dados exige tempo e dificulta a identificação rápida de possíveis falhas de sensores, inconsistências de abastecimento ou problemas de integração.
+Essas inconsistências dificultam:
 
-O Blitz Inteligente automatiza essa análise e fornece uma visão executiva dos resultados.
+- A validação dos dados operacionais
+- A identificação de falhas de telemetria
+- A análise de consumo de combustível
+- A priorização de tratativas
+- A tomada de decisão gerencial
+
+O Blitz Inteligente de Telemetria foi desenvolvido para automatizar esse processo e fornecer uma visão clara dos veículos que necessitam de atenção.
+
+---
+
+## 🎯 Objetivo
+
+Automatizar a auditoria de dados de telemetria, identificando divergências entre diferentes fontes de informação e fornecendo insights para a operação.
 
 ---
 
 ## 🚀 Funcionalidades
 
-### 📊 Dashboard Executivo
-
-- KPIs de auditoria
-- Distribuição dos status de validação
-- Insights automáticos
-- Ranking dos veículos mais críticos
-
-### 🤖 Diagnóstico Inteligente
-
-- Seleção individual de veículos
-- Análise automática das divergências
-- Score de confiabilidade
-- Recomendações baseadas no status encontrado
-
-### 📋 Auditoria Completa
-
-- Visualização de todos os registros
-- Busca por placa
-- Filtro por status
-- Paginação dos resultados
-
-### 📥 Relatórios
-
-- Exportação para Excel
-- Relatório consolidado da auditoria
-- Possibilidade de exportação filtrada por status
+- Upload de planilhas Excel
+- Tratamento automático dos dados
+- Comparação entre telemetrias
+- Cálculo automático de divergências
+- Classificação de criticidade dos veículos
+- Dashboard executivo com indicadores
+- Auditoria completa com filtros
+- Relatórios dos veículos mais críticos
+- Diagnóstico automático baseado em regras de negócio
+- Agente de Auditoria com IA Generativa
+- Consultas em linguagem natural
 
 ---
 
-## 🧠 Regras de Negócio
+## 📊 Módulos do Sistema
 
-### Classificação das Divergências
+### 📈 Dashboard
 
-| Divergência | Status |
-|------------|---------|
-| Até 5% | ✅ OK |
-| Entre 5% e 15% | ⚠️ Atenção |
-| Acima de 15% | ❌ Crítico |
+Visão executiva da operação contendo:
 
-### Baixa Rodagem
+- Indicadores principais
+- Veículos mais críticos
+- Ranking de divergências
+- Resumo da auditoria
 
-Veículos com menos de 30 km válidos são classificados como:
+### 🧠 Análise IA
 
+Realiza diagnóstico individual dos veículos utilizando regras de negócio e Inteligência Artificial.
+
+Permite identificar:
+
+- Possíveis causas da divergência
+- Impactos operacionais
+- Recomendações de ação
+
+### 📋 Auditoria Completa
+
+Exibe toda a base processada com filtros e recursos para investigação dos dados.
+
+### 📁 Relatórios
+
+Disponibiliza relatórios e análises dos veículos auditados.
+
+---
+
+## 🤖 Inteligência Artificial
+
+O sistema utiliza a API Google Gemini para atuar como um Agente de Auditoria Inteligente.
+
+O agente interpreta os resultados da auditoria e responde perguntas em linguagem natural, transformando dados técnicos em recomendações operacionais.
+
+### Exemplos de perguntas
+
+- Qual veículo devo priorizar?
+- Faça um resumo dos veículos críticos.
+- Quais são os maiores riscos encontrados?
+- Quais ações a operação deve executar primeiro?
+- Explique as principais divergências encontradas.
+
+---
+
+## 🏗️ Fluxo da Solução
+
+```text
+Planilha Excel
+        ↓
+Tratamento dos Dados
+        ↓
+Validação das Telemetrias
+        ↓
+Cálculo das Divergências
+        ↓
+Classificação dos Veículos
+        ↓
+Dashboard e Auditoria
+        ↓
+Agente de IA Generativa
+        ↓
+Recomendações Operacionais
 ```
-Baixa Rodagem
-```
-
-para evitar análises distorcidas por amostras insuficientes.
 
 ---
 
@@ -76,29 +120,22 @@ para evitar análises distorcidas por amostras insuficientes.
 - Pandas
 - Plotly
 - OpenPyXL
+- Google Gemini API
+- Git
+- GitHub
 
 ---
 
-## 📈 Fluxo de Processamento
-
-1. Importação da planilha Excel
-2. Extração dos dados das telemetrias
-3. Cálculo das médias alternativas
-4. Comparação entre telemetrias
-5. Cálculo das divergências
-6. Classificação dos veículos
-7. Geração dos insights
-8. Exportação dos relatórios
-
----
-
-## 💡 Diferenciais
+## ✨ Diferenciais
 
 - Interface intuitiva
-- Diagnóstico inteligente por veículo
 - Auditoria automatizada
+- Diagnóstico inteligente por veículo
 - Identificação rápida de inconsistências
-- Apoio à tomada de decisão operacional
+- Dashboard executivo
+- Integração com IA Generativa
+- Agente conversacional especializado em telemetria
+- Consultas em linguagem natural
 
 ---
 
@@ -122,13 +159,38 @@ Instale as dependências:
 pip install -r requirements.txt
 ```
 
+Configure sua chave da API Gemini em:
+
+```toml
+.streamlit/secrets.toml
+```
+
+Exemplo:
+
+```toml
+GEMINI_API_KEY = "SUA_CHAVE_AQUI"
+```
+
 Execute a aplicação:
 
 ```bash
 streamlit run app.py
 ```
 
+---
 
+## 📌 Caso de Uso
+
+O sistema foi desenvolvido como solução para um Hackathon de Inteligência Artificial voltado à otimização da auditoria de telemetria e apoio à tomada de decisão em operações logísticas.
+
+---
+
+## 👩‍💻 Autora
+
+Larissa Garcia
 
 LinkedIn:
 https://www.linkedin.com/in/larissagos/
+
+GitHub:
+https://github.com/larissagos0
