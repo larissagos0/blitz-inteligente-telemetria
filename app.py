@@ -18,9 +18,12 @@ st.markdown("""
     border-radius: 12px;
     color: white;
     margin-bottom: 15px;
+    text-align: center;
 ">
     <h2 style="margin:0;">🚚 Blitz Inteligente de Telemetria</h2>
-    <p style="margin:0; opacity:0.8;">
+    <p style="
+            margin-top:8px; 
+            opacity:0.85;">
         Painel executivo de auditoria de consumo de combustível    
     </p>
 </div>

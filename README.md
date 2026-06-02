@@ -18,7 +18,7 @@ Essas inconsistências dificultam:
 - A priorização de tratativas
 - A tomada de decisão gerencial
 
-O Blitz Inteligente de Telemetria foi desenvolvido para automatizar esse processo e fornecer uma visão clara dos veículos que necessitam de atenção.
+A Blitz Inteligente de Telemetria foi desenvolvido para automatizar esse processo e fornecer uma visão clara dos veículos que necessitam de atenção.
 
 ---
 
