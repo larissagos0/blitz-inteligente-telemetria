@@ -11,6 +11,7 @@ st.set_page_config(
     layout="wide"
 )
 
+# Header principal com gradiente
 st.markdown("""
 <div style="
     background: linear-gradient(90deg, #0B1F3A, #1F6FEB);
@@ -31,6 +32,7 @@ st.markdown("""
 
 st.divider()
 
+# Sidebar: upload de arquivo e navegação entre páginas
 with st.sidebar:
     st.markdown("⚙️ Controle do Painel")
 
@@ -38,7 +40,6 @@ with st.sidebar:
         "Envie a planilha Excel",
         type=["xlsx"]
     )
-
 
     pagina_app = st.radio(
         "🧭 Navegação",
@@ -70,6 +71,7 @@ with st.sidebar:
 )
 
 
+# Extrai KM e combustível de strings no formato "XXXX / YYYY"
 def extrair_dados(texto):
     numeros = re.findall(r"\d+", str(texto))
 
@@ -81,6 +83,7 @@ def extrair_dados(texto):
     return None, None
 
 
+# Calcula a média percentual em relação à meta
 def calcular_media(km, combustivel, meta):
     try:
         media = (km / combustivel) / meta
@@ -89,6 +92,7 @@ def calcular_media(km, combustivel, meta):
         return None
 
 
+# Calcula a divergência percentual entre a média oficial e a alternativa
 def calcular_divergencia(media_oficial, media_alternativa):
     if pd.isna(media_oficial) or pd.isna(media_alternativa):
         return None
@@ -107,6 +111,7 @@ def calcular_divergencia(media_oficial, media_alternativa):
         return None
 
 
+# Classifica o status com base na divergência e na quilometragem
 def classificar_divergencia(divergencia, km_valido):
     try:
         if km_valido < 30:
@@ -117,52 +122,43 @@ def classificar_divergencia(divergencia, km_valido):
 
         if divergencia <= 5:
             return "OK"
-
         elif divergencia <= 15:
             return "Atenção"
-
         else:
             return "Crítico"
 
     except:
         return None
 
-
+# Gera uma orientação textual padronizada para facilitar a tratativa operacional.
 def gerar_observacao(status, divergencia):
     if status == "OK":
         return "Divergência dentro do padrão esperado."
-
     elif status == "Atenção":
         return "Divergência moderada identificada. Recomenda-se validação."
-
     elif status == "Crítico":
         return "Possível inconsistência de telemetria detectada."
-
     elif status == "Sem comparação":
         return "Não foi possível comparar as telemetrias."
-
     elif status == "Baixa rodagem":
         return "Veículo com rodagem insuficiente para validação da telemetria."
-
     return ""
 
 
+# Score numérico de confiabilidade por status
 def calcular_score(status):
     if status == "OK":
         return 100
-
     elif status == "Atenção":
         return 70
-
     elif status == "Crítico":
         return 30
-
     elif status == "Baixa rodagem":
         return 0
-
     return 0
 
 
+# Componente visual de KPI estilizado
 def kpi_card(titulo, valor, cor):
     st.markdown(f"""
         <div style="
@@ -182,98 +178,77 @@ def kpi_card(titulo, valor, cor):
         </div>
     """, unsafe_allow_html=True)
 
+# Envia o contexto da auditoria ao Gemini e devolve a resposta do agente.
 def gerar_diagnostico_gemini(prompt):
     try:
-
         client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
-
         resposta = client.models.generate_content(
-        model="gemini-2.5-flash-lite",
-        contents=prompt
-    )
-
+            model="gemini-2.5-flash-lite",
+            contents=prompt
+        )
         return resposta.text
     except Exception:
-
+                # Mantém o painel utilizável mesmo quando a API, a chave ou a conexão falham.
         return """
 ⚠️ O agente de IA está temporariamente indisponível.
 
 A auditoria e os diagnósticos baseados em regras continuam funcionando normalmente.
 """
-    
+
+
+# Função auxiliar para processar o DataFrame bruto da planilha
+def processar_dataframe(df):
+    df["%Média"] = pd.to_numeric(df["%Média"], errors="coerce")
+    df["%Média"] = (df["%Média"] * 100).round(2)
+
+    # Separa quilometragem e combustível das duas fontes de telemetria.
+    if "Set Nativo" in df.columns:
+        df["KM_Nativo"], df["Comb_Nativo"] = zip(
+            *df["Set Nativo"].apply(extrair_dados)
+        )
+
+    if "Set Retrac" in df.columns:
+        df["KM_Retrac"], df["Comb_Retrac"] = zip(
+            *df["Set Retrac"].apply(extrair_dados)
+        )
+
+    df["Media_Alternativa"] = None
+
+    # Usa a telemetria oposta à válida para calcular a média alternativa
+    for index, row in df.iterrows():
+        telemetria = str(row["Telemetria Válida"])
+        meta = row["Meta"]
+
+        if "Retrac" in telemetria:
+            media = calcular_media(row["KM_Nativo"], row["Comb_Nativo"], meta)
+        else:
+            media = calcular_media(row["KM_Retrac"], row["Comb_Retrac"], meta)
+
+        df.at[index, "Media_Alternativa"] = media
+
+    df["Divergencia"] = df.apply(
+        lambda row: calcular_divergencia(row["%Média"], row["Media_Alternativa"]),
+        axis=1
+    )
+    df["Status"] = df.apply(
+        lambda row: classificar_divergencia(row["Divergencia"], row["KM Válido"]),
+        axis=1
+    )
+    df["Observacao_IA"] = df.apply(
+        lambda row: gerar_observacao(row["Status"], row["Divergencia"]),
+        axis=1
+    )
+    df["Score_Confiabilidade"] = df["Status"].apply(calcular_score)
+
+    return df
+
+
+# ─── PÁGINAS ────────────────────────────────────────────────────────────────
+
 if pagina_app == "📊 Dashboard":
 
     if arquivo is not None:
-
-        df = pd.read_excel(arquivo, header=2)
-
-        df["%Média"] = pd.to_numeric(
-            df["%Média"],
-            errors="coerce"
-        )
-
-        df["%Média"] = (df["%Média"] * 100).round(2)
-
-        if "Set Nativo" in df.columns:
-            df["KM_Nativo"], df["Comb_Nativo"] = zip(
-                *df["Set Nativo"].apply(extrair_dados)
-            )
-
-        if "Set Retrac" in df.columns:
-            df["KM_Retrac"], df["Comb_Retrac"] = zip(
-                *df["Set Retrac"].apply(extrair_dados)
-            )
-
-        df["Media_Alternativa"] = None
-
-        for index, row in df.iterrows():
-
-            telemetria = str(row["Telemetria Válida"])
-            meta = row["Meta"]
-
-            if "Retrac" in telemetria:
-                media = calcular_media(
-                    row["KM_Nativo"],
-                    row["Comb_Nativo"],
-                    meta
-                )
-
-            else:
-                media = calcular_media(
-                    row["KM_Retrac"],
-                    row["Comb_Retrac"],
-                    meta
-                )
-
-            df.at[index, "Media_Alternativa"] = media
-
-        df["Divergencia"] = df.apply(
-            lambda row: calcular_divergencia(
-                row["%Média"],
-                row["Media_Alternativa"]
-            ),
-            axis=1
-        )
-
-        df["Status"] = df.apply(
-            lambda row: classificar_divergencia(
-                row["Divergencia"],
-                row["KM Válido"]
-            ),
-            axis=1
-        )
-
-        df["Observacao_IA"] = df.apply(
-            lambda row: gerar_observacao(
-                row["Status"],
-                row["Divergencia"]
-            ),
-            axis=1
-        )
-
-        df["Score_Confiabilidade"] = df["Status"].apply(
-            calcular_score
-        )
+        df = processar_dataframe(pd.read_excel(arquivo, header=2))
 
         total = len(df)
         ok = len(df[df["Status"] == "OK"])
@@ -282,41 +257,25 @@ if pagina_app == "📊 Dashboard":
         sem_comparacao = len(df[df["Status"] == "Sem comparação"])
         baixa_rodagem = len(df[df["Status"] == "Baixa rodagem"])
 
+        # KPIs no topo
         col1, col2, col3, col4, col5, col6 = st.columns(6)
-
         with col1:
             kpi_card("🚛 Total", total, "#1F6FEB")
-
         with col2:
             kpi_card("✅ OK", ok, "#22C55E")
-
         with col3:
             kpi_card("⚠️ Atenção", atencao, "#FACC15")
-
         with col4:
             kpi_card("❌ Crítico", critico, "#EF4444")
-
         with col5:
             kpi_card("🔍 Sem comparação", sem_comparacao, "#6B7280")
-
         with col6:
             kpi_card("🚜 Baixa rodagem", baixa_rodagem, "#60A5FA")
 
+        # Resume a quantidade de veículos por status para alimentar o gráfico.
         dados_grafico = pd.DataFrame({
-            "Status": [
-                "OK",
-                "Atenção",
-                "Crítico",
-                "Sem comparação",
-                "Baixa rodagem"
-            ],
-            "Quantidade": [
-                ok,
-                atencao,
-                critico,
-                sem_comparacao,
-                baixa_rodagem
-            ]
+            "Status": ["OK", "Atenção", "Crítico", "Sem comparação", "Baixa rodagem"],
+            "Quantidade": [ok, atencao, critico, sem_comparacao, baixa_rodagem]
         })
 
         grafico = px.pie(
@@ -344,76 +303,54 @@ if pagina_app == "📊 Dashboard":
             height=420,
             showlegend=True
         )
-
-        grafico.update_traces(
-            textinfo="percent+label"
-        )
+        grafico.update_traces(textinfo="percent+label")
 
         col_grafico, col_insights = st.columns([1, 1])
 
         with col_grafico:
-            st.plotly_chart(
-                grafico,
-                width="stretch"
-            )
+            st.plotly_chart(grafico, use_container_width=True)
 
         with col_insights:
             st.markdown("<br><br>", unsafe_allow_html=True)
             st.subheader("📌 Insights")
 
-            df_validos = df[
-                df["Status"].isin(["OK", "Atenção", "Crítico"])
-            ].copy()
-
+            df_validos = df[df["Status"].isin(["OK", "Atenção", "Crítico"])].copy()
             maior_divergencia = df_validos["Divergencia"].max()
             media_divergencia = df_validos["Divergencia"].mean()
 
-            kpi_card(
-                "Maior Divergência",
-                f"{maior_divergencia:.2f} %",
-                "#EF4444"
-            )
-
+            kpi_card("Maior Divergência", f"{maior_divergencia:.2f} %", "#EF4444")
             st.markdown("<br>", unsafe_allow_html=True)
-
-            kpi_card(
-                "Média de Divergência",
-                f"{media_divergencia:.2f} %",
-                "#FACC15"
-            )
-
+            kpi_card("Média de Divergência", f"{media_divergencia:.2f} %", "#FACC15")
             st.markdown("<br>", unsafe_allow_html=True)
-
-            kpi_card(
-                "Total Analisado",
-                len(df),
-                "#1F6FEB"
-            )
-
-        top_criticos = df[
-            df["Status"] == "Crítico"
-        ].sort_values(
-            by="Divergencia",
-            ascending=False
+            kpi_card("Total Analisado", len(df), "#1F6FEB")
+        
+        # Destaca os veículos com maior divergência para orientar a priorização.
+        top_criticos = df[df["Status"] == "Crítico"].sort_values(
+            by="Divergencia", ascending=False
         ).head(10)
 
         colunas_criticos = [
-            "Placa",
-            "Telemetria Válida",
-            "%Média",
+            "Placa", 
+            "Telemetria Válida", 
+            "%Média", 
             "Media_Alternativa",
-            "Divergencia",
-            "Score_Confiabilidade",
-            "Status",
+            "Divergencia", 
+            "Score_Confiabilidade", 
+            "Status", 
             "Observacao_IA",
         ]
 
         st.divider()
-
         st.subheader("🚨 Top 10 Veículos Críticos")
+        top_criticos_exibir = top_criticos[colunas_criticos].rename(
+            columns={
+                "Divergencia": "Divergência (%)",
+                "Media_Alternativa": "Média Alternativa (%)",
+            }
+        )
 
         st.dataframe(
-            top_criticos[colunas_criticos],
+            top_criticos_exibir,
             width="stretch"
         )
 
@@ -424,117 +361,24 @@ elif pagina_app == "🤖 Análise IA":
     st.markdown("Diagnóstico inteligente por veículo com base nas divergências de telemetria.")
 
     if arquivo is not None:
+        df_ia = processar_dataframe(pd.read_excel(arquivo, header=2))
 
-        df_ia = pd.read_excel(arquivo, header=2)
+        placas = sorted(df_ia["Placa"].dropna().unique())
+        placa_selecionada = st.selectbox("Selecione o veículo", placas)
 
-        df_ia["%Média"] = pd.to_numeric(
-            df_ia["%Média"],
-            errors="coerce"
-        )
-
-        df_ia["%Média"] = (
-            df_ia["%Média"] * 100
-        ).round(2)
-
-        if "Set Nativo" in df_ia.columns:
-            df_ia["KM_Nativo"], df_ia["Comb_Nativo"] = zip(
-                *df_ia["Set Nativo"].apply(extrair_dados)
-            )
-
-        if "Set Retrac" in df_ia.columns:
-            df_ia["KM_Retrac"], df_ia["Comb_Retrac"] = zip(
-                *df_ia["Set Retrac"].apply(extrair_dados)
-            )
-
-        df_ia["Media_Alternativa"] = None
-
-        for index, row in df_ia.iterrows():
-            telemetria = str(row["Telemetria Válida"])
-            meta = row["Meta"]
-
-            if "Retrac" in telemetria:
-                media = calcular_media(
-                    row["KM_Nativo"],
-                    row["Comb_Nativo"],
-                    meta
-                )
-            else:
-                media = calcular_media(
-                    row["KM_Retrac"],
-                    row["Comb_Retrac"],
-                    meta
-                )
-
-            df_ia.at[index, "Media_Alternativa"] = media
-
-        df_ia["Divergencia"] = df_ia.apply(
-            lambda row: calcular_divergencia(
-                row["%Média"],
-                row["Media_Alternativa"]
-            ),
-            axis=1
-        )
-
-        df_ia["Status"] = df_ia.apply(
-            lambda row: classificar_divergencia(
-                row["Divergencia"],
-                row["KM Válido"]
-            ),
-            axis=1
-        )
-
-        df_ia["Observacao_IA"] = df_ia.apply(
-            lambda row: gerar_observacao(
-                row["Status"],
-                row["Divergencia"]
-            ),
-            axis=1
-        )
-
-        df_ia["Score_Confiabilidade"] = df_ia["Status"].apply(
-            calcular_score
-        )
-
-        placas = sorted(
-            df_ia["Placa"].dropna().unique()
-        )
-
-        placa_selecionada = st.selectbox(
-            "Selecione o veículo",
-            placas
-        )
-
-        dados_veiculo = df_ia[
-            df_ia["Placa"] == placa_selecionada
-        ].iloc[0]
+        dados_veiculo = df_ia[df_ia["Placa"] == placa_selecionada].iloc[0]
 
         st.divider()
 
         col1, col2, col3, col4 = st.columns(4)
-
         with col1:
-            st.metric(
-                "%Média Oficial",
-                f"{dados_veiculo['%Média']:.2f}%"
-            )
-
+            st.metric("%Média Oficial", f"{dados_veiculo['%Média']:.2f}%")
         with col2:
-            st.metric(
-                "Média Alternativa",
-                f"{dados_veiculo['Media_Alternativa']:.2f}%"
-            )
-
+            st.metric("Média Alternativa", f"{dados_veiculo['Media_Alternativa']:.2f}%")
         with col3:
-            st.metric(
-                "Divergência",
-                f"{dados_veiculo['Divergencia']:.2f}%"
-            )
-
+            st.metric("Divergência", f"{dados_veiculo['Divergencia']:.2f}%")
         with col4:
-            st.metric(
-                "Score IA",
-                f"{dados_veiculo['Score_Confiabilidade']}/100"
-            )
+            st.metric("Score IA", f"{dados_veiculo['Score_Confiabilidade']}/100")
 
         st.markdown(f"""
         **Placa:** {dados_veiculo["Placa"]}  
@@ -547,79 +391,45 @@ elif pagina_app == "🤖 Análise IA":
         status = dados_veiculo["Status"]
 
         if status == "OK":
-            st.success(
-                "✅ As telemetrias estão consistentes. "
-                "A divergência está dentro do padrão esperado."
-            )
-
+            st.success("✅ As telemetrias estão consistentes. A divergência está dentro do padrão esperado.")
         elif status == "Atenção":
-            st.warning(
-                "⚠️ Divergência moderada identificada. "
-                "Recomenda-se acompanhar este veículo nas próximas análises."
-            )
-
+            st.warning("⚠️ Divergência moderada identificada. Recomenda-se acompanhar este veículo nas próximas análises.")
         elif status == "Crítico":
-            st.error(
-                "🚨 Divergência crítica identificada. "
-                "Recomenda-se validar sensores, abastecimentos e histórico de telemetria."
-            )
-
+            st.error("🚨 Divergência crítica identificada. Recomenda-se validar sensores, abastecimentos e histórico de telemetria.")
         elif status == "Baixa rodagem":
-            st.info(
-                "ℹ️ Veículo com baixa rodagem. "
-                "A amostra é insuficiente para uma comparação confiável."
-            )
-
+            st.info("ℹ️ Veículo com baixa rodagem. A amostra é insuficiente para uma comparação confiável.")
         else:
-            st.info(
-                "Não foi possível realizar comparação entre as telemetrias."
-            )
+            st.info("Não foi possível realizar comparação entre as telemetrias.")
 
         st.markdown("### Observação automática")
         st.write(dados_veiculo["Observacao_IA"])
 
         st.divider()
 
-
         st.subheader("💬 Chat com Agente de Auditoria")
+        st.markdown("Faça perguntas sobre a auditoria, veículos críticos, prioridades ou recomendações operacionais.")
 
-        st.markdown(
-            "Faça perguntas sobre a auditoria, veículos críticos, prioridades ou recomendações operacionais."
-        )
-
+        # Monta contexto para o prompt do agente
+        df_validos = df_ia[df_ia["Status"].isin(["OK", "Atenção", "Crítico"])].copy()
         total = len(df_ia)
         ok = len(df_ia[df_ia["Status"] == "OK"])
         atencao = len(df_ia[df_ia["Status"] == "Atenção"])
         critico = len(df_ia[df_ia["Status"] == "Crítico"])
         sem_comparacao = len(df_ia[df_ia["Status"] == "Sem comparação"])
         baixa_rodagem = len(df_ia[df_ia["Status"] == "Baixa rodagem"])
-
-        df_validos = df_ia[
-            df_ia["Status"].isin(["OK", "Atenção", "Crítico"])
-        ].copy()
-
         maior_divergencia = df_validos["Divergencia"].max()
         media_divergencia = df_validos["Divergencia"].mean()
 
-        top_criticos_chat = df_ia[
-            df_ia["Status"] == "Crítico"
-        ].sort_values(
-            by="Divergencia",
-            ascending=False
+        # Converte somente as colunas relevantes em texto para limitar o contexto
+        # enviado ao modelo e evitar o compartilhamento desnecessário de dados.
+        top_criticos_chat = df_ia[df_ia["Status"] == "Crítico"].sort_values(
+            by="Divergencia", ascending=False
         ).head(10)
 
-        contexto_criticos = top_criticos_chat[
-            [
-                "Placa",
-                "Telemetria Válida",
-                "%Média",
-                "Media_Alternativa",
-                "Divergencia",
-                "KM Válido",
-                "Score_Confiabilidade",
-                "Status"
-            ]
-        ].to_string(index=False)
+        contexto_criticos = top_criticos_chat[[
+            "Placa", "Telemetria Válida", "%Média", "Media_Alternativa",
+            "Divergencia", "KM Válido", "Score_Confiabilidade", "Status"
+        ]].to_string(index=False)
 
         pergunta_usuario = st.text_area(
             "Digite sua pergunta para o agente",
@@ -627,10 +437,8 @@ elif pagina_app == "🤖 Análise IA":
         )
 
         if st.button("🤖 Perguntar ao agente"):
-
             if pergunta_usuario.strip() == "":
                 st.warning("Digite uma pergunta antes de enviar.")
-
             else:
                 prompt_chat = f"""
                 Você é um agente especialista em auditoria de telemetria de veículos pesados.
@@ -663,48 +471,21 @@ elif pagina_app == "🤖 Análise IA":
                 try:
                     with st.spinner("Consultando agente de auditoria..."):
                         resposta_agente = gerar_diagnostico_gemini(prompt_chat)
-
                     st.success("Resposta gerada pelo agente.")
                     st.markdown(resposta_agente)
-
                 except Exception as erro:
-                    st.error(
-                        "Não foi possível consultar a IA neste momento. "
-                        "Verifique a cota da API ou tente novamente mais tarde."
-                    )
+                    st.error("Não foi possível consultar a IA neste momento.")
                     st.caption(str(erro))
 
-        
     else:
         st.warning("Envie uma planilha na barra lateral para gerar o diagnóstico.")
+
 
 elif pagina_app == "📋 Auditoria Completa":
 
     st.title("📋 Auditoria Completa")
-    col1, col2 = st.columns([2, 1])
 
-    with col1:
-        placa_busca = st.text_input(
-            "🔎 Buscar placa",
-            placeholder="Digite a placa..."
-        )
-
-    with col2:
-        filtro_status = st.selectbox(
-            "Filtrar por status",
-            [
-                "Todos",
-                "OK",
-                "Atenção",
-                "Crítico",
-                "Sem comparação",
-                "Baixa rodagem"
-            ]
-        )
-
-    st.markdown(
-        "Visualize todos os registros tratados da auditoria, com filtros e paginação."
-    )
+    st.markdown("Visualize todos os registros tratados da auditoria, com filtros e paginação.")
 
     if arquivo is not None:
 
@@ -731,6 +512,7 @@ elif pagina_app == "📋 Auditoria Completa":
 
         df_auditoria["Media_Alternativa"] = None
 
+        # Usa a telemetria oposta à válida para calcular a média de comparação
         for index, row in df_auditoria.iterrows():
             telemetria = str(row["Telemetria Válida"])
             meta = row["Meta"]
@@ -778,83 +560,104 @@ elif pagina_app == "📋 Auditoria Completa":
             calcular_score
         )
 
+        col1, col2 = st.columns([1, 1])
+
+        with col1:
+            placa_selecionada = st.selectbox(
+                "🔎 Buscar placa",
+                ["Todas"] + sorted(
+                    df_auditoria["Placa"]
+                    .dropna()
+                    .astype(str)
+                    .unique()
+                )
+            )
+
+        with col2:
+            filtro_status = st.selectbox(
+                "Filtrar por status",
+                [
+                    "Todos",
+                    "OK",
+                    "Atenção",
+                    "Crítico",
+                    "Sem comparação",
+                    "Baixa rodagem"
+                ]
+            )
+
+        # Aplica filtros de status e busca por placa
         if filtro_status == "Todos":
             df_filtrado_auditoria = df_auditoria.copy()
         else:
             df_filtrado_auditoria = df_auditoria[
                 df_auditoria["Status"] == filtro_status
             ].copy()
-        if placa_busca:
+
+        if placa_selecionada != "Todas":
             df_filtrado_auditoria = df_filtrado_auditoria[
-                df_filtrado_auditoria["Placa"]
-                .astype(str)
-                .str.contains(
-                    placa_busca,
-                    case=False,
-                    na=False
-                )
+                df_filtrado_auditoria["Placa"].astype(str) == placa_selecionada
             ]
 
         colunas_exibir = [
-            "Peso da Carga",
-            "Placa",
-            "KM Válido",
-            "Comb Válido",
-            "Telemetria Válida",
-            "Set Nativo",
-            "Set Retrac",
-            "%Média",
-            "Meta",
-            "KM_Nativo",
-            "Comb_Nativo",
-            "KM_Retrac",
-            "Comb_Retrac",
-            "Media_Alternativa",
-            "Divergencia",
-            "Status",
-            "Observacao_IA",
+            "Peso da Carga", "Placa", "KM Válido", "Comb Válido",
+            "Telemetria Válida", "Set Nativo", "Set Retrac", "%Média", "Meta",
+            "KM_Nativo", "Comb_Nativo", "KM_Retrac", "Comb_Retrac",
+            "Média Alternativa (%)", "Divergência (%)", "Status", "Observacao_IA",
             "Score_Confiabilidade",
         ]
 
-        registros_por_pagina = st.selectbox(
-            "Registros por página",
-            [10, 20, 50, 100],
-            index=1
-        )
+        # Lê valores salvos na sessão para calcular a tabela antes de exibir os widgets
+        # Lê valores salvos na sessão para calcular a tabela antes de exibir os widgets
+        registros_por_pagina = st.session_state.get("registros_por_pagina_auditoria", 20)
+        pagina = st.session_state.get("pagina_auditoria", 1)
 
         total_paginas = max(
             1,
             (len(df_filtrado_auditoria) - 1) // registros_por_pagina + 1
         )
 
-        pagina = st.number_input(
-            "Página",
-            min_value=1,
-            max_value=total_paginas,
-            value=1
-        )
-
         inicio = (pagina - 1) * registros_por_pagina
         fim = inicio + registros_por_pagina
-
         df_pagina = df_filtrado_auditoria.iloc[inicio:fim]
 
         st.caption(
             f"Exibindo {len(df_pagina)} registros de {len(df_filtrado_auditoria)} filtrados."
         )
-
+        df_pagina_exibir = df_pagina.rename(
+            columns={
+                "Media_Alternativa": "Média Alternativa (%)",
+                "Divergencia": "Divergência (%)"
+            }
+        )
         st.dataframe(
-            df_pagina[colunas_exibir],
+            df_pagina_exibir[colunas_exibir],
             width="stretch"
         )
 
-    else:
-        st.warning("Envie uma planilha na barra lateral para visualizar a auditoria.")
+        # Controles de paginação abaixo da tabela
+        col_pag1, col_pag2 = st.columns([1, 1])
+
+        with col_pag1:
+            st.selectbox(
+                "Registros por página",
+                [10, 20, 50, 100],
+                index=1,
+                key="registros_por_pagina_auditoria"
+            )
+
+        with col_pag2:
+            st.number_input(
+                "Página",
+                min_value=1,
+                max_value=total_paginas,
+                value=1,
+                key="pagina_auditoria"
+            )
 
 elif pagina_app == "📥 Relatórios":
-    
-    st.title("📥 Relatórios")
 
+    st.title("📥 Relatórios")
     st.markdown("""
     Gere e baixe o relatório final da auditoria de telemetria com médias,
     divergências, status e observações inteligentes.
@@ -862,98 +665,41 @@ elif pagina_app == "📥 Relatórios":
 
     filtro_status_relatorio = st.selectbox(
         "Filtrar relatório por status",
-        [
-            "Todos",
-            "OK",
-            "Atenção",
-            "Crítico",
-            "Sem comparação",
-            "Baixa rodagem"
-        ]
+        ["Todos", "OK", "Atenção", "Crítico", "Sem comparação", "Baixa rodagem"]
     )
 
     if arquivo is not None:
-
-        df_relatorio = pd.read_excel(arquivo, header=2)
-
-        df_relatorio["%Média"] = pd.to_numeric(
-            df_relatorio["%Média"],
-            errors="coerce"
-        )
-
-        df_relatorio["%Média"] = (
-            df_relatorio["%Média"] * 100
-        ).round(2)
-
-        if "Set Nativo" in df_relatorio.columns:
-            df_relatorio["KM_Nativo"], df_relatorio["Comb_Nativo"] = zip(
-                *df_relatorio["Set Nativo"].apply(extrair_dados)
-            )
-
-        if "Set Retrac" in df_relatorio.columns:
-            df_relatorio["KM_Retrac"], df_relatorio["Comb_Retrac"] = zip(
-                *df_relatorio["Set Retrac"].apply(extrair_dados)
-            )
-
-        df_relatorio["Media_Alternativa"] = None
-
-        for index, row in df_relatorio.iterrows():
-            telemetria = str(row["Telemetria Válida"])
-            meta = row["Meta"]
-
-            if "Retrac" in telemetria:
-                media = calcular_media(
-                    row["KM_Nativo"],
-                    row["Comb_Nativo"],
-                    meta
-                )
-            else:
-                media = calcular_media(
-                    row["KM_Retrac"],
-                    row["Comb_Retrac"],
-                    meta
-                )
-
-            df_relatorio.at[index, "Media_Alternativa"] = media
-
-        df_relatorio["Divergencia"] = df_relatorio.apply(
-            lambda row: calcular_divergencia(
-                row["%Média"],
-                row["Media_Alternativa"]
-            ),
-            axis=1
-        )
-
-        df_relatorio["Status"] = df_relatorio.apply(
-            lambda row: classificar_divergencia(
-                row["Divergencia"],
-                row["KM Válido"]
-            ),
-            axis=1
-        )
-
-        df_relatorio["Observacao_IA"] = df_relatorio.apply(
-            lambda row: gerar_observacao(
-                row["Status"],
-                row["Divergencia"]
-            ),
-            axis=1
-        )
-
-        df_relatorio["Score_Confiabilidade"] = df_relatorio["Status"].apply(
-            calcular_score
-        )
+        df_relatorio = processar_dataframe(pd.read_excel(arquivo, header=2))
 
         if filtro_status_relatorio != "Todos":
-            df_relatorio = df_relatorio[
-                df_relatorio["Status"] == filtro_status_relatorio
-            ]
+            df_relatorio = df_relatorio[df_relatorio["Status"] == filtro_status_relatorio]
 
-        df_relatorio.to_excel(
-            "relatorio_telemetria.xlsx",
-            index=False,
-            engine="openpyxl"
+        # Seleciona somente as informações relevantes para o relatório final,
+        # evitando exportar todas as colunas da planilha original.
+        df_relatorio_exportar = df_relatorio[
+            [
+                "Placa",
+                "Telemetria Válida",
+                "%Média",
+                "Media_Alternativa",
+                "Divergencia",
+                "Status",
+                "Observacao_IA",
+                "Score_Confiabilidade"
+            ]
+        ].copy()
+
+        df_relatorio_exportar = df_relatorio_exportar.rename(
+            columns={
+                "%Média": "Média Oficial (%)",
+                "Media_Alternativa": "Média Alternativa (%)",
+                "Divergencia": "Divergência (%)",
+                "Observacao_IA": "Observação IA",
+                "Score_Confiabilidade": "Score de Confiabilidade"
+            }
         )
+
+        df_relatorio_exportar.to_excel("relatorio_telemetria.xlsx", index=False, engine="openpyxl")
 
         st.success("Relatório gerado com sucesso.")
 
