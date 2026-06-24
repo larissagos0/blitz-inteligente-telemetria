@@ -242,6 +242,38 @@ def processar_dataframe(df):
 
     return df
 
+def formatar_percentual(valor):
+    if pd.isna(valor):
+        return "Não disponível"
+    
+    try:
+        return f"{float(valor):.2f}%"
+    except (TypeError, ValueError):
+        return "Não disponível"
+
+def classificar_status_por_divergencia(divergencia):
+    """Formata valores percentuais e trata valores nulos ou inválidos."""
+    if pd.isna(divergencia):
+        return "Sem comparação"
+    elif divergencia > 10:
+        return "Crítico"
+    elif divergencia > 5:
+        return "Atenção"
+    else:
+        return "OK"
+    
+def calcular_score_por_status(status):
+    """Calcula um score simples de confiabilidade com base no status."""
+    if status == "OK":
+        return 100
+    elif status == "Atenção":
+        return 70
+    elif status == "Crítico":
+        return 40
+    elif status == "Baixa Rodagem":
+        return 50
+    else:
+        return 0   
 
 # ─── PÁGINAS ────────────────────────────────────────────────────────────────
 
@@ -366,43 +398,150 @@ elif pagina_app == "🤖 Análise IA":
         placas = sorted(df_ia["Placa"].dropna().unique())
         placa_selecionada = st.selectbox("Selecione o veículo", placas)
 
-        dados_veiculo = df_ia[df_ia["Placa"] == placa_selecionada].iloc[0]
+        dados_placa = df_ia[df_ia["Placa"] == placa_selecionada].copy()
+
+        #Converte colunas numéricas para evitar erro com texto, vazio ou valores nulos
+        dados_placa["%Média"] = pd.to_numeric(dados_placa["%Média"], errors="coerce")
+        dados_placa["Media_Alternativa"] = pd.to_numeric(dados_placa["Media_Alternativa"], errors="coerce")
+        dados_placa["Divergencia"] = pd.to_numeric(dados_placa["Divergencia"], errors="coerce")
+        dados_placa["Score_Confiabilidade"] = pd.to_numeric(dados_placa["Score_Confiabilidade"], errors="coerce")
+
+        #Indicadores consolidados da placa no período
+        dias_analisados = len(dados_placa)
+        media_oficial_consolidada = dados_placa["%Média"].mean()
+        media_alternativa_consolidada = dados_placa["Media_Alternativa"].mean()
+        dias_criticos = len(dados_placa[dados_placa["Divergencia"] > 10])
+
+        #Divergência consolidada entre a média oficial e a média alternativa do período
+        if pd.notna(media_oficial_consolidada) and media_oficial_consolidada != 0 and pd.notna(media_alternativa_consolidada):
+            divergencia_consolidada = abs(
+                (media_alternativa_consolidada - media_oficial_consolidada) / media_oficial_consolidada
+            ) * 100
+        else:
+            divergencia_consolidada = None
+
+        #Status principal baseado na divergência consolidada        
+        status = classificar_status_por_divergencia(divergencia_consolidada)
+        score_ia = calcular_score_por_status(status)
+
+        #Pega informações cadastrais da primeira ocorrência válida da placa
+        telemetria_valida = (
+            dados_placa["Telemetria Válida"]
+            .dropna()
+            .iloc[0]
+            if not dados_placa["Telemetria Válida"].dropna().empty
+            else "Não informado"
+        )
 
         st.divider()
 
         col1, col2, col3, col4 = st.columns(4)
+
         with col1:
-            st.metric("%Média Oficial", f"{dados_veiculo['%Média']:.2f}%")
+            st.metric(
+                "Divergência Consolidada",
+                formatar_percentual(divergencia_consolidada)
+            )
+
         with col2:
-            st.metric("Média Alternativa", f"{dados_veiculo['Media_Alternativa']:.2f}%")
+            st.metric(
+                "Dias analisados",
+                dias_analisados
+            )
+
         with col3:
-            st.metric("Divergência", f"{dados_veiculo['Divergencia']:.2f}%")
+            st.metric(
+                "Dias críticos",
+                dias_criticos
+            )        
+
         with col4:
-            st.metric("Score IA", f"{dados_veiculo['Score_Confiabilidade']}/100")
+            st.metric(
+                "Status",
+                status
+        
+            )
 
         st.markdown(f"""
-        **Placa:** {dados_veiculo["Placa"]}  
-        **Telemetria válida:** {dados_veiculo["Telemetria Válida"]}  
-        **Status:** {dados_veiculo["Status"]}
-        """)
+        **Placa:** {placa_selecionada}  
+        **Telemetria Válida:** {telemetria_valida}  
+        **Status consolidado:** {status}  
+        """)                
+
+        st.subheader("Consolidado do veículo")
+
+        col_a, col_b, col_c = st.columns(3)
+
+        with col_a:
+            st.metric(
+                "% Média Oficial consolidada",
+                formatar_percentual(media_oficial_consolidada)
+            )
+
+        with col_b:
+            st.metric(
+                "Média Alternativa consolidada",
+                formatar_percentual(media_alternativa_consolidada)
+            )    
+
+        with col_c:
+            st.metric(
+                "Score IA",
+                f"{score_ia} / 100"
+            )
 
         st.subheader("🧠 Diagnóstico Inteligente")
 
-        status = dados_veiculo["Status"]
-
         if status == "OK":
-            st.success("✅ As telemetrias estão consistentes. A divergência está dentro do padrão esperado.")
+            st.success("✅ No consolidado do período, as telemetrias estão consistentes.")
         elif status == "Atenção":
-            st.warning("⚠️ Divergência moderada identificada. Recomenda-se acompanhar este veículo nas próximas análises.")
+            st.warning("⚠️ Divergência moderada no consolidado do período. Recomenda-se acompanhar o veículo.")
         elif status == "Crítico":
-            st.error("🚨 Divergência crítica identificada. Recomenda-se validar sensores, abastecimentos e histórico de telemetria.")
+            st.error("🚨 Divergência crítica no consolidado do período. Recomenda-se validar o histórico de telemetria.")
         elif status == "Baixa rodagem":
             st.info("ℹ️ Veículo com baixa rodagem. A amostra é insuficiente para uma comparação confiável.")
         else:
             st.info("Não foi possível realizar comparação entre as telemetrias.")
 
         st.markdown("### Observação automática")
-        st.write(dados_veiculo["Observacao_IA"])
+        
+        if status == "OK" and dias_criticos == 0:
+            observacao_automatica = (
+                "No consolidado do período, a divergência está dentro do padrão esperado "
+                "e não houve dias críticos registrados para esta placa."
+
+            )
+        elif status == "OK" and dias_criticos > 0:
+            observacao_automatica = (
+                f"No consolidado do período, a divergência está dentro do padrão esperado. "
+                f"Apesar disso, a placa apresentou {dias_criticos} dia(s) crítico(s), "
+                "o que pode indicar oscilações pontuais entre as telemetrias."
+            )  
+              
+        elif status == "Atenção":
+            observacao_automatica = (
+                f"A placa apresentou divergência moderada no consolidado do período "
+                f"e teve {dias_criticos} dia(s) crítico(s). Recomenda-se acompanhar se o comportamento se repete."
+            )       
+
+
+        elif status == "Crítico":
+            observacao_automatica = (
+                f"A placa apresentou divergência crítica no consolidado do período "
+                f"e teve {dias_criticos} dia(s) crítico(s). Recomenda-se priorizar a validação da telemetria."
+            )
+
+        elif status == "Baixa rodagem":
+            observacao_automatica = (
+                "Veículo com baixa rodagem no período analisado. A amostra pode ser insuficiente para uma comparação confiável."
+           )            
+        else:
+            observacao_automatica = (
+                "Não há dados suficientes para comparação entre as telemetrias."
+            
+            ) 
+
+        st.write(observacao_automatica)      
 
         st.divider()
 
