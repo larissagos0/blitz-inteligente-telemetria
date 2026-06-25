@@ -126,6 +126,54 @@ Recomendações Operacionais
 
 ---
 
+---
+
+## 🤖 Evolução V2 — Arquitetura com Agentes de Auditoria
+
+A versão 2 da Blitz Inteligente de Telemetria iniciou a evolução do projeto para uma arquitetura baseada em agentes especializados, inspirada em plataformas como **Pandada AI** e **V7 Go**.
+
+A **Pandada AI** foi utilizada como referência para a experiência de análise conversacional de dados, em que o usuário pode carregar arquivos, consultar informações em linguagem natural e obter análises, gráficos e relatórios automatizados.
+
+O **V7 Go** foi utilizado como referência para a estrutura de agentes aplicados a fluxos de auditoria, com foco na identificação de exceções, organização de evidências, geração de relatórios e apoio à tomada de decisão.
+
+Nesta primeira etapa da V2, foi implementado o **Agente de Auditoria de Divergências**, responsável por consolidar os dados por veículo e gerar uma visão mais confiável da criticidade de cada placa.
+
+### Responsabilidades do Agente de Auditoria
+
+* Consolidar os registros por placa;
+* Calcular a média oficial consolidada;
+* Calcular a média alternativa consolidada;
+* Calcular a divergência consolidada do período;
+* Identificar a quantidade de dias críticos;
+* Classificar o status consolidado do veículo;
+* Definir uma prioridade operacional para análise;
+* Apoiar a geração do ranking de veículos críticos.
+
+Com essa mudança, a aplicação deixa de analisar apenas linhas isoladas da planilha e passa a considerar o comportamento consolidado do veículo no período analisado.
+
+### Regras de classificação
+
+A classificação dos veículos é realizada com base na divergência consolidada:
+
+| Divergência consolidada | Status         |
+| ----------------------: | -------------- |
+|                  Até 5% | OK             |
+|     Acima de 5% até 10% | Atenção        |
+|            Acima de 10% | Crítico        |
+|   Sem dados suficientes | Sem comparação |
+
+Além do status consolidado, o agente também calcula a quantidade de **dias críticos**, considerando os dias em que a divergência diária ultrapassou 10%.
+
+### Próximas evoluções previstas
+
+* Criar um Agente de Diagnóstico para gerar explicações automáticas por veículo;
+* Criar um Agente de Relatório para preparar o encaminhamento dos veículos críticos;
+* Implementar histórico mensal por placa;
+* Permitir análise dos últimos meses por veículo;
+* Identificar reincidência de divergências;
+* Gerar relatórios para os responsáveis pelas telemetrias;
+* Registrar tratativas e retornos recebidos.
+
 ## ✨ Diferenciais
 
 - Interface intuitiva

@@ -13,20 +13,31 @@ def classificar_status_por_divergencia(divergencia):
         return "OK"
 
 
-def classificar_prioridade(status, dias_criticos):
-    """Define a prioridade operacional com base no status e nos dias críticos."""
-    if status == "Crítico" and dias_criticos >= 5:
-        return "Alta"
-    elif status == "Crítico":
-        return "Média"
-    elif status == "Atenção" and dias_criticos >= 3:
-        return "Média"
+def classificar_prioridade(status, dias_criticos, dias_analisados):
+    """Define a prioridade operacional com base no status, dias críticos e volume de dados."""
+    
+    if dias_analisados < 5:
+        return "Validar amostra"
+
+    if status == "Crítico":
+        if dias_criticos > 5:
+            return "Alta"
+        elif dias_criticos >= 3:
+            return "Média"
+        else:
+            return "Baixa"
+        
     elif status == "Atenção":
-        return "Baixa"
+        if dias_criticos >= 3:
+            return "Média"
+        elif dias_criticos > 0:
+            return "Baixa"
+        else:
+            return "Baixa"
+
     else:
         return "Normal"
-
-
+    
 def executar_agente_auditoria(df):
     """
     Agente de Auditoria de Divergências.
@@ -47,6 +58,10 @@ def executar_agente_auditoria(df):
         df_agente["Divergencia"],
         errors="coerce"
     )
+
+    df_agente = df_agente[
+        df_agente["Status"].isin(["OK","Atenção","Crítico"])
+    ].copy()
 
     analise_placas = (
         df_agente
@@ -83,7 +98,8 @@ def executar_agente_auditoria(df):
     analise_placas["prioridade"] = analise_placas.apply(
         lambda linha: classificar_prioridade(
             linha["status_consolidado"],
-            linha["dias_criticos"]
+            linha["dias_criticos"],
+            linha["dias_analisados"]
         ),
         axis=1
     )

@@ -21,7 +21,7 @@ st.markdown("""
     margin-bottom: 15px;
     text-align: center;
 ">
-    <h2 style="margin:0;">🚚 Blitz Inteligente de Telemetria</h2>
+    <h2 style="margin:0;"> Blitz Inteligente de Telemetria</h2>
     <p style="
             margin-top:8px; 
             opacity:0.85;">
@@ -281,7 +281,7 @@ if pagina_app == "📊 Dashboard":
 
     if arquivo is not None:
         df = processar_dataframe(pd.read_excel(arquivo, header=2))
-
+        analise_agente = executar_agente_auditoria(df)
         
         total = len(df)
         ok = len(df[df["Status"] == "OK"])
@@ -346,16 +346,22 @@ if pagina_app == "📊 Dashboard":
         with col_insights:
             st.markdown("<br><br>", unsafe_allow_html=True)
             st.subheader("📌 Insights")
+            st.caption("Indicadores consolidados por veículo, com base no Agente de Auditoria")
 
-            df_validos = df[df["Status"].isin(["OK", "Atenção", "Crítico"])].copy()
-            maior_divergencia = df_validos["Divergencia"].max()
-            media_divergencia = df_validos["Divergencia"].mean()
 
-            kpi_card("Maior Divergência", f"{maior_divergencia:.2f} %", "#EF4444")
+            veiculos_validos = analise_agente[
+                analise_agente["status_consolidado"].isin(["OK", "Atenção", "Crítico"])
+            ].copy()
+
+            maior_divergencia = veiculos_validos["divergencia_consolidada"].max()
+            media_divergencia = veiculos_validos["divergencia_consolidada"].mean()
+            total_veiculos_analisados = len(analise_agente)
+
+            kpi_card("Maior divergência consolidada", f"{maior_divergencia:.2f} %", "#FF4B4B")
             st.markdown("<br>", unsafe_allow_html=True)
-            kpi_card("Média de Divergência", f"{media_divergencia:.2f} %", "#FACC15")
+            kpi_card("Média de divergência consolidada", f"{media_divergencia:.2f} %", "#FFD700")
             st.markdown("<br>", unsafe_allow_html=True)
-            kpi_card("Total Analisado", len(df), "#1F6FEB")
+            kpi_card("Veículos analisados", total_veiculos_analisados, "#1F6FEB")
         
         # Cria uma cópia para calcular o ranking consolidado sem alterar o DataFrame original.
         df_ranking = df.copy()
@@ -402,7 +408,7 @@ if pagina_app == "📊 Dashboard":
         top_criticos_exibir = top_criticos.rename(
             columns={
                 "telemetria_valida": "Telemetria Válida",
-                "dias_analisados": "Dias analisados",
+                "dias_analisados": "Dias válidos",
                 "dias_criticos": "Dias críticos",
                 "media_oficial_consolidada": "% Média Oficial consolidada",
                 "media_alternativa_consolidada": "Média Alternativa consolidada",
@@ -416,7 +422,7 @@ if pagina_app == "📊 Dashboard":
         colunas_criticos = [
             "Placa",
             "Telemetria Válida",
-            "Dias analisados",
+            "Dias válidos",
             "Dias críticos",
             "% Média Oficial consolidada",
             "Média Alternativa consolidada",
@@ -438,7 +444,7 @@ if pagina_app == "📊 Dashboard":
         )
     
         st.divider()
-        st.subheader("Top 10 veículos críticos")
+        st.subheader("Top veículos críticos consolidados")
 
         if top_criticos_exibir.empty:
             st.success("Nenhum veículo crítico identificado no consolidado do período")
