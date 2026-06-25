@@ -126,8 +126,6 @@ Recomendações Operacionais
 
 ---
 
----
-
 ## 🤖 Evolução V2 — Arquitetura com Agentes de Auditoria
 
 A versão 2 da Blitz Inteligente de Telemetria iniciou a evolução do projeto para uma arquitetura baseada em agentes especializados, inspirada em plataformas como **Pandada AI** e **V7 Go**.
