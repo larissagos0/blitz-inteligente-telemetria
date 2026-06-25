@@ -356,36 +356,96 @@ if pagina_app == "📊 Dashboard":
             st.markdown("<br>", unsafe_allow_html=True)
             kpi_card("Total Analisado", len(df), "#1F6FEB")
         
-        # Destaca os veículos com maior divergência para orientar a priorização.
-        top_criticos = df[df["Status"] == "Crítico"].sort_values(
-            by="Divergencia", ascending=False
-        ).head(10)
+        # Cria uma cópia para calcular o ranking consolidado sem alterar o DataFrame original.
+        df_ranking = df.copy()
 
-        colunas_criticos = [
-            "Placa", 
-            "Telemetria Válida", 
-            "%Média", 
-            "Media_Alternativa",
-            "Divergencia", 
-            "Score_Confiabilidade", 
-            "Status", 
-            "Observacao_IA",
-        ]
+        df_ranking["%Média"] = pd.to_numeric(df_ranking["%Média"], errors="coerce")
+        df_ranking["Media_Alternativa"] = pd.to_numeric(df_ranking["Media_Alternativa"], errors="coerce")
+        df_ranking["Divergencia"] = pd.to_numeric(df_ranking["Divergencia"], errors="coerce")
 
-        st.divider()
-        st.subheader("🚨 Top 10 Veículos Críticos")
-        top_criticos_exibir = top_criticos[colunas_criticos].rename(
+        # Consolida os dados por placa
+        ranking_placas = (
+            df_ranking
+            .groupby("Placa")
+            .agg(
+                telemetria_valida=("Telemetria Válida", "first"),
+                dias_analisados=("Placa", "count"),
+                dias_criticos=("Divergencia", lambda x: (x > 10).sum()),
+                media_oficial_consolidada=("%Média", "mean"),
+                media_alternativa_consolidada=("Media_Alternativa", "mean"),
+            )
+            .reset_index()
+        )
+
+        # Calcula a divergência consolidada da placa no período
+        ranking_placas["Divergencia_Consolidada"] = ranking_placas.apply(
+            lambda linha: abs(
+                (linha["media_alternativa_consolidada"] - linha["media_oficial_consolidada"]) / linha["media_oficial_consolidada"]
+            ) * 100
+            if pd.notna(linha["media_oficial_consolidada"]) and linha["media_oficial_consolidada"] != 0 and pd.notna(linha["media_alternativa_consolidada"])
+            else None,
+            axis=1
+        )
+
+        # Classifica cada placa com base na divergência consolidada
+        ranking_placas["Status_Consolidado"] = ranking_placas["Divergencia_Consolidada"].apply(classificar_status_por_divergencia)
+
+        #Mantém somente os veículos críticos no consolidado
+        top_criticos = (
+            ranking_placas[ranking_placas["Status_Consolidado"] == "Crítico"]
+            .sort_values(by="Divergencia_Consolidada", ascending=False)
+            .head(10)
+        )
+
+        # Organiza nomes para exibição
+        top_criticos_exibir = top_criticos.rename(
             columns={
-                "Divergencia": "Divergência (%)",
-                "Media_Alternativa": "Média Alternativa (%)",
+                "telemetria_valida": "Telemetria Válida",
+                "dias_analisados": "Dias analisados",
+                "dias_criticos": "Dias críticos",
+                "media_oficial_consolidada": "% Média Oficial consolidada",
+                "media_alternativa_consolidada": "Média Alternativa consolidada",
+                "Divergencia_Consolidada": "Divergência consolidada (%)",
+                "Status_Consolidado": "Status consolidado",
             }
         )
 
-        st.dataframe(
-            top_criticos_exibir,
-            width="stretch"
+        #Arredonda os percentuais para melhorar a visualização
+        top_criticos_exibir["% Média Oficial consolidada"] = (
+            top_criticos_exibir["% Média Oficial consolidada"].round(2)
+
         )
 
+        top_criticos_exibir["Média Alternativa consolidada"] = (
+            top_criticos_exibir["Média Alternativa consolidada"].round(2)
+        )
+
+        top_criticos_exibir["Divergência consolidada (%)"] = (
+            top_criticos_exibir["Divergência consolidada (%)"].round(2)
+        )
+
+        # Define a ordem das colunas exibidas
+        colunas_criticos = [
+            "Placa",
+            "Telemetria Válida",
+            "Dias analisados",
+            "Dias críticos",
+            "% Média Oficial consolidada",
+            "Média Alternativa consolidada",
+            "Divergência consolidada (%)",
+            "Status consolidado",
+        ]
+
+        st.divider()
+        st.subheader("🚨 Top 10 veículos críticos")
+
+        if top_criticos_exibir.empty:
+            st.success("Nenhum veículo crítico identificado no consolidado do período.")
+        else:
+            st.dataframe(
+                top_criticos_exibir[colunas_criticos],
+                width="stretch"
+            )
 
 elif pagina_app == "🤖 Análise IA":
 
