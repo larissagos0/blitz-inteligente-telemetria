@@ -3,7 +3,7 @@ import pandas as pd
 import re
 import plotly.express as px
 from google import genai
-
+from agents.agente_auditoria import executar_agente_auditoria
 
 st.set_page_config(
     page_title="Blitz Inteligente",
@@ -282,6 +282,7 @@ if pagina_app == "📊 Dashboard":
     if arquivo is not None:
         df = processar_dataframe(pd.read_excel(arquivo, header=2))
 
+        
         total = len(df)
         ok = len(df[df["Status"] == "OK"])
         atencao = len(df[df["Status"] == "Atenção"])
@@ -390,14 +391,14 @@ if pagina_app == "📊 Dashboard":
         # Classifica cada placa com base na divergência consolidada
         ranking_placas["Status_Consolidado"] = ranking_placas["Divergencia_Consolidada"].apply(classificar_status_por_divergencia)
 
-        #Mantém somente os veículos críticos no consolidado
+        analise_agente = executar_agente_auditoria(df)
+
         top_criticos = (
-            ranking_placas[ranking_placas["Status_Consolidado"] == "Crítico"]
-            .sort_values(by="Divergencia_Consolidada", ascending=False)
+            analise_agente[analise_agente["status_consolidado"] == "Crítico"]
+            .sort_values(by="divergencia_consolidada", ascending=False)
             .head(10)
         )
 
-        # Organiza nomes para exibição
         top_criticos_exibir = top_criticos.rename(
             columns={
                 "telemetria_valida": "Telemetria Válida",
@@ -405,26 +406,13 @@ if pagina_app == "📊 Dashboard":
                 "dias_criticos": "Dias críticos",
                 "media_oficial_consolidada": "% Média Oficial consolidada",
                 "media_alternativa_consolidada": "Média Alternativa consolidada",
-                "Divergencia_Consolidada": "Divergência consolidada (%)",
-                "Status_Consolidado": "Status consolidado",
+                "divergencia_consolidada": "Divergência consolidada (%)",
+                "status_consolidado": "Status consolidado",
+                "prioridade": "Prioridade",
+
             }
         )
 
-        #Arredonda os percentuais para melhorar a visualização
-        top_criticos_exibir["% Média Oficial consolidada"] = (
-            top_criticos_exibir["% Média Oficial consolidada"].round(2)
-
-        )
-
-        top_criticos_exibir["Média Alternativa consolidada"] = (
-            top_criticos_exibir["Média Alternativa consolidada"].round(2)
-        )
-
-        top_criticos_exibir["Divergência consolidada (%)"] = (
-            top_criticos_exibir["Divergência consolidada (%)"].round(2)
-        )
-
-        # Define a ordem das colunas exibidas
         colunas_criticos = [
             "Placa",
             "Telemetria Válida",
@@ -434,13 +422,27 @@ if pagina_app == "📊 Dashboard":
             "Média Alternativa consolidada",
             "Divergência consolidada (%)",
             "Status consolidado",
-        ]
+            "Prioridade",
+            ]    
 
+        top_criticos_exibir["% Média Oficial consolidada"] = (
+            top_criticos_exibir["% Média Oficial consolidada"].round(2)
+        )
+
+        top_criticos_exibir["Média Alternativa consolidada"] = (
+            top_criticos_exibir["Média Alternativa consolidada"].round(2)
+        )
+
+        top_criticos_exibir["Divergência consolidada (%)"] = (
+            top_criticos_exibir["Divergência consolidada (%)"].round(2)
+        )
+    
         st.divider()
-        st.subheader("🚨 Top 10 veículos críticos")
+        st.subheader("Top 10 veículos críticos")
 
         if top_criticos_exibir.empty:
-            st.success("Nenhum veículo crítico identificado no consolidado do período.")
+            st.success("Nenhum veículo crítico identificado no consolidado do período")
+
         else:
             st.dataframe(
                 top_criticos_exibir[colunas_criticos],
