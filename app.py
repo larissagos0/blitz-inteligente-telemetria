@@ -566,27 +566,76 @@ elif pagina_app == "🤖 Análise IA":
         st.subheader("💬 Chat com Agente de Auditoria")
         st.markdown("Faça perguntas sobre a auditoria, veículos críticos, prioridades ou recomendações operacionais.")
 
-        # Monta contexto para o prompt do agente
-        df_validos = df_ia[df_ia["Status"].isin(["OK", "Atenção", "Crítico"])].copy()
-        total = len(df_ia)
-        ok = len(df_ia[df_ia["Status"] == "OK"])
-        atencao = len(df_ia[df_ia["Status"] == "Atenção"])
-        critico = len(df_ia[df_ia["Status"] == "Crítico"])
-        sem_comparacao = len(df_ia[df_ia["Status"] == "Sem comparação"])
-        baixa_rodagem = len(df_ia[df_ia["Status"] == "Baixa rodagem"])
-        maior_divergencia = df_validos["Divergencia"].max()
-        media_divergencia = df_validos["Divergencia"].mean()
+        veiculos_validos = analise_agente[
+            analise_agente["status_consolidado"].isin(["OK", "Atenção", "Crítico"])
+        ].copy()
 
-        # Converte somente as colunas relevantes em texto para limitar o contexto
-        # enviado ao modelo e evitar o compartilhamento desnecessário de dados.
-        top_criticos_chat = df_ia[df_ia["Status"] == "Crítico"].sort_values(
-            by="Divergencia", ascending=False
-        ).head(10)
+        total_veiculos = len(analise_agente)
+        ok = len(analise_agente[analise_agente["status_consolidado"] == "OK"])
+        atencao = len(analise_agente[analise_agente["status_consolidado"] == "Atenção"])
+        critico = len(analise_agente[analise_agente["status_consolidado"] == "Crítico"])
 
-        contexto_criticos = top_criticos_chat[[
-            "Placa", "Telemetria Válida", "%Média", "Media_Alternativa",
-            "Divergencia", "KM Válido", "Score_Confiabilidade", "Status"
-        ]].to_string(index=False)
+        maior_divergencia = veiculos_validos["divergencia_consolidada"].max()
+        media_divergencia = veiculos_validos["divergencia_consolidada"].mean()
+
+        top_criticos_chat = (
+            analise_agente[analise_agente["status_consolidado"] == "Crítico"]
+            .sort_values(by="divergencia_consolidada", ascending=False)
+            .head(10)
+        )
+
+        contexto_criticos = top_criticos_chat [
+            [
+                "Placa",
+                "telemetria_valida",
+                "dias_analisados",
+                "dias_criticos",
+                "media_oficial_consolidada",
+                "media_alternativa_consolidada",
+                "divergencia_consolidada",
+                "status_consolidado",
+                "prioridade",
+            ]
+        ].round(2).to_string(index=False)
+
+        detalhe_placa_chat = df_ia[
+            df_ia["Placa"] == placa_selecionada
+        ].copy()
+
+        detalhe_placa_chat = detalhe_placa_chat.sort_values(
+            by="Divergencia",
+            ascending=False
+        ).head(15)
+
+        contexto_detalhe_placa = detalhe_placa_chat[
+            [
+                "Placa",
+                "Data",
+                "Telemetria Válida",
+                "%Média",
+                "Media_Alternativa",
+                "Divergencia",
+                "Status",
+            ]
+        ].to_string(index=False)
+
+        top_dias_criticos = (
+            df_ia[df_ia["Status"] == "Crítico"]
+            .sort_values(by="Divergencia", ascending=False)
+            .head(15)
+        )
+
+        contexto_dias_criticos = top_dias_criticos [
+            [
+                "Placa",
+                "Data",
+                "Telemetria Válida",
+                "%Média",
+                "Media_Alternativa",
+                "Divergencia",
+                "Status",
+            ]
+        ].to_string(index=False)
 
         pergunta_usuario = st.text_area(
             "Digite sua pergunta para o agente",
@@ -602,27 +651,46 @@ elif pagina_app == "🤖 Análise IA":
 
                 Responda em português, de forma objetiva, operacional e útil para uma equipe de logística.
 
-                Dados gerais da auditoria:
-                - Total de veículos analisados: {total}
-                - OK: {ok}
-                - Atenção: {atencao}
-                - Crítico: {critico}
-                - Sem comparação: {sem_comparacao}
-                - Baixa rodagem: {baixa_rodagem}
-                - Maior divergência: {maior_divergencia:.2f}%
-                - Média de divergência: {media_divergencia:.2f}%
+                A auditoria possui duas visões:
+                1. Visão consolidada por veículo, usada para priorização operacional.
+                2. Visão diária por registro, usada para investigar dias específicos de divergência.
+                
+                Dados consolidados da auditoria por veículo:
+                - Total de veículos analisados: {total_veiculos}
+                - Veículos OK: {ok}
+                - Veículos em atenção: {atencao}
+                - Veículos críticos: {critico}
+                - Maior divergência consolidada: {maior_divergencia:.2f}%
+                - Média de divergência consolidada: {media_divergencia:.2f}%
 
-                Top 10 veículos críticos:
+                Top veículos críticos consolidados:
                 {contexto_criticos}
+
+                Registros diários da placa selecionada ({placa_selecionada}):
+                {contexto_detalhe_placa}
+
+                Top registros diários críticos da auditoria:
+                {contexto_dias_criticos}
 
                 Pergunta do usuário:
                 {pergunta_usuario}
 
                 Regras para resposta:
                 - Não invente dados fora do contexto informado.
-                - Se precisar priorizar, use a maior divergência e o status crítico.
-                - Sempre que possível, cite as placas relevantes.
+                - Para priorização, use a visão consolidada por veículo.
+                - Para perguntas sobre dias específicos, use os registros diários.
+                - Diferencie claramente divergência consolidada de divergência diária.
+                -"dias_analisados" representa a quantidade de dias válidos para comparação, ignorando baixa rodagem e sem comparação.
+                - Se a amostra for baixa, informe que a análise precisa ser validada.
+                - Sempre que possível, cite placas, dias críticos, divergência e prioridade.
                 - Termine com ações recomendadas.
+                - Não trate todos os veículos críticos como urgentes. Use a prioridade operacional para diferenciar Validar amostra, Baixa, Média e Alta.
+                - Quando a prioridade for "Validar amostra", destaque que há poucos dias válidos e que o caso não deve ser priorizado antes de confirmar a representatividade dos dados.
+                - Se a média alternativa ou oficial estiver zerada, indique que pode haver ausência de leitura ou falha de registro, e não conclua automaticamente que houve consumo real divergente.
+                - Seja objetivo. Priorize respostas em formato de resumo operacional, evitando explicações longas demais.
+                - Quando a pergunta for ampla, responda em no máximo 4 seções: Resumo, Prioridades, Evidências e Ações recomendadas.
+                - Não use o termo "Prioridade Crítica". Use somente as prioridades existentes: Validar amostra, Baixa, Média ou Alta.
+                - Quando a prioridade for "Validar amostra", não classifique o veículo como prioridade imediata. Informe que primeiro é necessário validar se a amostra é representativa.
                 """
 
                 try:
