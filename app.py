@@ -944,14 +944,24 @@ elif pagina_app == "📥 Relatórios":
 
         st.subheader("Relatório Inteligente - Veículos Críticos Consolidados")
         st.markdown(
-            "Relatório gerado pelo Agente de Relatório com base na análise consolidada por veículo"
+            "Gere um relatório estruturado dos veículos críticos consolidados para apoio à análise operacional."
         )
 
         analise_agente = executar_agente_auditoria(df_relatorio_completo)
 
         relatorio_criticos = gerar_relatorio_criticos(analise_agente)
 
-        st.markdown(relatorio_criticos)    
+        st.success("Relatório inteligente gerado com sucesso.")
+
+        st.download_button(
+            label="📥 Baixar Relatório Inteligente",
+            data=relatorio_criticos,
+            file_name="relatorio_inteligente_veiculos_criticos.md",
+            mime="text/markdown"
+        )
+
+        with st.expander("Visualizar prévia de relatório"):
+            st.markdown(relatorio_criticos)    
 
     else:
         st.warning("Envie uma planilha na barra lateral para gerar o relatório.")
