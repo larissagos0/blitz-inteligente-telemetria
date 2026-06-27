@@ -4,6 +4,7 @@ import re
 import plotly.express as px
 from google import genai
 from agents.agente_auditoria import executar_agente_auditoria
+from agents.agente_diagnostico import gerar_diagnostico_veiculo
 
 st.set_page_config(
     page_title="Blitz Inteligente",
@@ -462,44 +463,26 @@ elif pagina_app == "🤖 Análise IA":
 
     if arquivo is not None:
         df_ia = processar_dataframe(pd.read_excel(arquivo, header=2))
-
-        placas = sorted(df_ia["Placa"].dropna().unique())
+        
+        analise_agente = executar_agente_auditoria(df_ia)
+        
+        placas = sorted(analise_agente["Placa"].dropna().unique())
         placa_selecionada = st.selectbox("Selecione o veículo", placas)
 
-        dados_placa = df_ia[df_ia["Placa"] == placa_selecionada].copy()
+        dados_veiculo = analise_agente[
+            analise_agente["Placa"] == placa_selecionada
+        ].iloc[0]
 
-        #Converte colunas numéricas para evitar erro com texto, vazio ou valores nulos
-        dados_placa["%Média"] = pd.to_numeric(dados_placa["%Média"], errors="coerce")
-        dados_placa["Media_Alternativa"] = pd.to_numeric(dados_placa["Media_Alternativa"], errors="coerce")
-        dados_placa["Divergencia"] = pd.to_numeric(dados_placa["Divergencia"], errors="coerce")
-        dados_placa["Score_Confiabilidade"] = pd.to_numeric(dados_placa["Score_Confiabilidade"], errors="coerce")
+        dias_analisados = dados_veiculo["dias_analisados"]
+        dias_criticos = dados_veiculo["dias_criticos"]
+        media_oficial_consolidada = dados_veiculo["media_oficial_consolidada"]
+        media_alternativa_consolidada = dados_veiculo["media_alternativa_consolidada"]
+        divergencia_consolidada = dados_veiculo["divergencia_consolidada"]
+        status = dados_veiculo["status_consolidado"]
+        prioridade = dados_veiculo["prioridade"]
+        telemetria_valida = dados_veiculo["telemetria_valida"]
 
-        #Indicadores consolidados da placa no período
-        dias_analisados = len(dados_placa)
-        media_oficial_consolidada = dados_placa["%Média"].mean()
-        media_alternativa_consolidada = dados_placa["Media_Alternativa"].mean()
-        dias_criticos = len(dados_placa[dados_placa["Divergencia"] > 10])
-
-        #Divergência consolidada entre a média oficial e a média alternativa do período
-        if pd.notna(media_oficial_consolidada) and media_oficial_consolidada != 0 and pd.notna(media_alternativa_consolidada):
-            divergencia_consolidada = abs(
-                (media_alternativa_consolidada - media_oficial_consolidada) / media_oficial_consolidada
-            ) * 100
-        else:
-            divergencia_consolidada = None
-
-        #Status principal baseado na divergência consolidada        
-        status = classificar_status_por_divergencia(divergencia_consolidada)
         score_ia = calcular_score_por_status(status)
-
-        #Pega informações cadastrais da primeira ocorrência válida da placa
-        telemetria_valida = (
-            dados_placa["Telemetria Válida"]
-            .dropna()
-            .iloc[0]
-            if not dados_placa["Telemetria Válida"].dropna().empty
-            else "Não informado"
-        )
 
         st.divider()
 
@@ -513,7 +496,7 @@ elif pagina_app == "🤖 Análise IA":
 
         with col2:
             st.metric(
-                "Dias analisados",
+                "Dias válidos",
                 dias_analisados
             )
 
@@ -534,6 +517,7 @@ elif pagina_app == "🤖 Análise IA":
         **Placa:** {placa_selecionada}  
         **Telemetria Válida:** {telemetria_valida}  
         **Status consolidado:** {status}  
+        **Prioridade operacional:** {prioridade}
         """)                
 
         st.subheader("Consolidado do veículo")
@@ -571,45 +555,11 @@ elif pagina_app == "🤖 Análise IA":
         else:
             st.info("Não foi possível realizar comparação entre as telemetrias.")
 
-        st.markdown("### Observação automática")
-        
-        if status == "OK" and dias_criticos == 0:
-            observacao_automatica = (
-                "No consolidado do período, a divergência está dentro do padrão esperado "
-                "e não houve dias críticos registrados para esta placa."
+        st.markdown("Diagnóstico do agente")
 
-            )
-        elif status == "OK" and dias_criticos > 0:
-            observacao_automatica = (
-                f"No consolidado do período, a divergência está dentro do padrão esperado. "
-                f"Apesar disso, a placa apresentou {dias_criticos} dia(s) crítico(s), "
-                "o que pode indicar oscilações pontuais entre as telemetrias."
-            )  
-              
-        elif status == "Atenção":
-            observacao_automatica = (
-                f"A placa apresentou divergência moderada no consolidado do período "
-                f"e teve {dias_criticos} dia(s) crítico(s). Recomenda-se acompanhar se o comportamento se repete."
-            )       
+        diagnostico_agente = gerar_diagnostico_veiculo(dados_veiculo)
 
-
-        elif status == "Crítico":
-            observacao_automatica = (
-                f"A placa apresentou divergência crítica no consolidado do período "
-                f"e teve {dias_criticos} dia(s) crítico(s). Recomenda-se priorizar a validação da telemetria."
-            )
-
-        elif status == "Baixa rodagem":
-            observacao_automatica = (
-                "Veículo com baixa rodagem no período analisado. A amostra pode ser insuficiente para uma comparação confiável."
-           )            
-        else:
-            observacao_automatica = (
-                "Não há dados suficientes para comparação entre as telemetrias."
-            
-            ) 
-
-        st.write(observacao_automatica)      
+        st.write(diagnostico_agente)      
 
         st.divider()
 
