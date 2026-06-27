@@ -5,6 +5,8 @@ import plotly.express as px
 from google import genai
 from agents.agente_auditoria import executar_agente_auditoria
 from agents.agente_diagnostico import gerar_diagnostico_veiculo
+from agents.agente_relatorio import gerar_relatorio_criticos
+
 
 st.set_page_config(
     page_title="Blitz Inteligente",
@@ -896,6 +898,8 @@ elif pagina_app == "📥 Relatórios":
     if arquivo is not None:
         df_relatorio = processar_dataframe(pd.read_excel(arquivo, header=2))
 
+        df_relatorio_completo = df_relatorio.copy()
+
         if filtro_status_relatorio != "Todos":
             df_relatorio = df_relatorio[df_relatorio["Status"] == filtro_status_relatorio]
 
@@ -935,6 +939,19 @@ elif pagina_app == "📥 Relatórios":
                 file_name="relatorio_telemetria.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
+
+        st.divider()
+
+        st.subheader("Relatório Inteligente - Veículos Críticos Consolidados")
+        st.markdown(
+            "Relatório gerado pelo Agente de Relatório com base na análise consolidada por veículo"
+        )
+
+        analise_agente = executar_agente_auditoria(df_relatorio_completo)
+
+        relatorio_criticos = gerar_relatorio_criticos(analise_agente)
+
+        st.markdown(relatorio_criticos)    
 
     else:
         st.warning("Envie uma planilha na barra lateral para gerar o relatório.")
